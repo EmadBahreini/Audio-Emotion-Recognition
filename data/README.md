@@ -30,6 +30,22 @@ _Filename example: 03-01-06-01-02-01-12.wav_
 
 Female, as the actor ID number is even.
 
+## Additional Notes
+
+- **RAVDESS** directory structure:
+
+```
+RAVDESS/
+├── Speech/
+│   ├── Actor_01/
+│   ├── Actor_02/
+│   └── ...
+└── Singing/
+    ├── Actor_01/
+    ├── Actor_02/
+    └── ...
+```
+
 ## Citation
 
 Livingstone SR, Russo FA (2018) The Ryerson Audio-Visual Database of Emotional Speech and Song (RAVDESS): A dynamic, multimodal set of facial and vocal expressions in North American English. PLoS ONE 13(5): e0196391. https://doi.org/10.1371/journal.pone.0196391.
