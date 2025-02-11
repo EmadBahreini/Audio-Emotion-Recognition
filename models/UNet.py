@@ -2,9 +2,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import  DataLoader
-from sklearn.metrics import confusion_matrix, f1_score, recall_score, precision_score, accuracy_score, classification_report
+from sklearn.metrics import confusion_matrix, classification_report, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
 
 from models.Best_Model_Saver import BestModelSaver
@@ -273,16 +272,18 @@ def get_all_metrics(model, test_loader, device):
     print("Classification Report:")
     print(classification_report(all_y_true, all_y_pred, target_names=label_names))
 
-    conf_matrix = confusion_matrix(all_y_true, all_y_pred)
 
     # Display Confusion Matrix
 
+    conf_matrix = confusion_matrix(all_y_true, all_y_pred)
 
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", xticklabels=label_names, yticklabels=label_names)
-    plt.xlabel("Predicted")
-    plt.ylabel("True")
-    plt.title("Confusion Matrix")
+    fig ,ax= plt.subplots(figsize=(8, 6))
+
+    cm_display = ConfusionMatrixDisplay(conf_matrix,display_labels=label_names)
+    cm_display.plot(cmap='Blues',xticks_rotation = 45,colorbar=False,ax=ax)
+
+    ax.set_title("Confusion Matrix for CNN Model")
+
     plt.show()
 
 
