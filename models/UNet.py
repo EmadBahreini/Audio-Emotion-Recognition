@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
+from models.Best_Model_Saver import BestModelSaver
+
 
 class UNet(nn.Module):
     def __init__(self, num_classes=8, threshold_value=0.5):
@@ -134,6 +136,8 @@ def train_model(model, train_loader:DataLoader,test_loader:DataLoader,scheduler,
     train_accuracies = []
     test_accuracies = []
 
+    model_saver = BestModelSaver()
+
     model.train()
     for epoch in range(num_epochs):
         total_loss = 0
@@ -162,15 +166,20 @@ def train_model(model, train_loader:DataLoader,test_loader:DataLoader,scheduler,
         # Test the model
         test_loss, test_accuracy = eval_model(model, test_loader,criterion,device)
         scheduler.step(test_accuracy)
+
+        # Save best model
+        model_saver(test_accuracy,model)
         
 
         if (epoch+1) % 10 == 0 :
             if verbos:
                 print(f"Epoch [{epoch+1}/{num_epochs}], TRLoss: {total_loss/len(train_loader):.4f}, TRAccuracy: {correct/total:.4f}, TSLoss: {test_loss:.4f}, TSAccuracy: {test_accuracy:.4f}")
-        test_losses.append(test_loss)   
-        train_losses.append(total_loss/len(train_loader.dataset))
-        train_accuracies.append(correct/total)
-        test_accuracies.append(test_accuracy)
+            test_losses.append(test_loss)   
+            train_losses.append(total_loss/len(train_loader.dataset))
+            train_accuracies.append(correct/total)
+            test_accuracies.append(test_accuracy)
+        if epoch+1 == num_epochs:
+            print(f"Best Model Acc: {model_saver.best_acc}")
 
     return train_losses, test_losses, train_accuracies, test_accuracies 
 
@@ -257,24 +266,17 @@ def get_all_metrics(model, test_loader, device):
     # Convert to NumPy arrays
     all_y_true = np.array(all_y_true)
     all_y_pred = np.array(all_y_pred)
-    # print(np.array(np.unique(all_y_true, return_counts=True)).T)
-    # print(np.array(np.unique(all_y_pred, return_counts=True)).T)
 
-    # Compute metrics
-    precision = precision_score(all_y_true, all_y_pred, average='macro',zero_division=1) #Unweighted Average Precision
-    recall = recall_score(all_y_true, all_y_true, average='macro',zero_division=1) # UAR 
-    f1 = f1_score(all_y_true, all_y_pred, average="macro", zero_division=1)
+    label_names = [_label_to_emotion_for_metrics(i) for i in range(8)]
+
+    # Print classification report
+    print("Classification Report:")
+    print(classification_report(all_y_true, all_y_pred, target_names=label_names))
 
     conf_matrix = confusion_matrix(all_y_true, all_y_pred)
 
-    # Print results
-    print(f"Macro Precision: {precision:.4f}")
-    print(f"UAR (Macro Recall): {recall:.4f}")
-    print(f"Macro F1-score: {f1:.4f}")
-
     # Display Confusion Matrix
 
-    label_names = [_label_to_emotion_for_metrics(i) for i in range(8)]
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", xticklabels=label_names, yticklabels=label_names)
@@ -283,6 +285,4 @@ def get_all_metrics(model, test_loader, device):
     plt.title("Confusion Matrix")
     plt.show()
 
-    # Print classification report
-    print("Classification Report:")
-    print(classification_report(all_y_true, all_y_pred, target_names=label_names))
+

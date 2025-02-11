@@ -6,6 +6,7 @@ from sklearn.metrics import confusion_matrix, f1_score, recall_score, precision_
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from models.Best_Model_Saver import BestModelSaver
 
 class CNN(nn.Module):
     def __init__(self, input_length, num_classes):
@@ -27,9 +28,8 @@ class CNN(nn.Module):
         self.conv4 = nn.Conv1d(128, 128, kernel_size=5, padding='same')
         self.conv5 = nn.Conv1d(128, 128, kernel_size=5, padding='same')
         self.bn3 = nn.BatchNorm1d(128)
-        self.relu3 = nn.ReLU()
+        self.relu2 = nn.ReLU()
         self.dropout2 = nn.Dropout(0.2)
-        self.pool2 = nn.MaxPool1d(kernel_size=8, stride=8, padding=0)
         
         # Fourth block
         self.conv6 = nn.Conv1d(128, 128, kernel_size=5, padding='same')
@@ -37,24 +37,22 @@ class CNN(nn.Module):
         self.dropout3 = nn.Dropout(0.2)
         
         # Dense layer
-        self.fc1 = nn.Linear((input_length // 64) * 128, num_classes)
+        self.fc1 = nn.Linear((input_length // 8) * 128,num_classes)
         self.bn4 = nn.BatchNorm1d(num_classes)
 
     def forward(self, x):
         # First block
         x = self.relu1(self.bn1(self.conv1(x)))
-        
         # Second block
         x = self.pool1(self.bn2(self.dropout1(F.relu(self.conv2(x)))))
-        
         # Third block
         x = F.relu(self.conv3(x))
         x = F.relu(self.conv4(x))
-        x = F.relu(self.conv5(x))
-        x = self.pool2(self.bn3(self.dropout2(x)))
+        x = self.conv5(x)
+        x = self.dropout2(self.relu2(self.bn3(x)))
         
         # Fourth block
-        x = F.relu(self.conv6(x))
+        x = self.conv6(x)
         x = self.flatten(x)
         x = self.dropout3(x)
         
@@ -62,7 +60,58 @@ class CNN(nn.Module):
         x = self.fc1(x)
         x = self.bn4(x)
         return F.softmax(x, dim=1)  # Class probabilities
-    
+
+class EarlyStoppingAccuracy:
+    """Stop training if validation accuracy does not improve after a certain number of epochs."""
+    def __init__(self, patience=10, verbose=False, delta=0, path='best_model.pth'):
+        """
+        Args:
+            patience (int): How many epochs to wait after last improvement before stopping.
+            verbose (bool): If True, prints messages when stopping.
+            delta (float): Minimum change to qualify as an improvement.
+            path (str): Filepath to save the best model.
+        """
+        self.patience = patience
+        self.verbose = verbose
+        self.delta = delta
+        self.path = path
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.best_acc = 0.0
+
+    def __call__(self, val_acc, model):
+        """
+        Args:
+            val_acc (float): Current validation accuracy.
+            model (torch.nn.Module): Model to save if accuracy improves.
+        """
+        score = val_acc  # We maximize accuracy, so higher is better
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_acc, model)
+
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f"EarlyStopping counter: {self.counter}/{self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_acc, model)
+            self.counter = 0  # Reset counter
+
+    def save_checkpoint(self, val_acc, model):
+        """Saves model when validation accuracy improves."""
+        torch.save(model.state_dict(), self.path)
+        self.best_acc = val_acc
+        if self.verbose:
+            print(f"Validation accuracy improved. Saving model to {self.path}")
+
+
 def eval_model(model, test_loader:DataLoader,criterion,device:str)-> tuple:
     """
     Evaluate the model on the test set.
@@ -101,7 +150,13 @@ def eval_model(model, test_loader:DataLoader,criterion,device:str)-> tuple:
     
     return avg_loss, accuracy
 
-def train_model(model, train_loader:DataLoader,test_loader:DataLoader, criterion, optimizer,scheduler, device:str, num_epochs:int=10,verbos:bool=True)-> tuple:
+def train_model(model, train_loader:DataLoader,test_loader:DataLoader,
+                 criterion, optimizer,scheduler,
+                 device:str,
+                 num_epochs:int=10,
+                 use_early_stopping:bool=False,
+                 verbos:bool=True,
+                 print_best = True)-> tuple:
     """
     Trains a given model using the provided training and testing data loaders, optimizer, and scheduler.
 
@@ -128,7 +183,8 @@ def train_model(model, train_loader:DataLoader,test_loader:DataLoader, criterion
     test_losses = []
     train_accuracies = []
     test_accuracies = []
-
+    early_stopping = EarlyStoppingAccuracy(patience=10, verbose=False, path='best_CNN_model.pth',delta=0.001)
+    model_saver = BestModelSaver()
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
@@ -155,8 +211,17 @@ def train_model(model, train_loader:DataLoader,test_loader:DataLoader, criterion
 
         # Test the model
         test_loss, test_accuracy = eval_model(model, test_loader,criterion,device)
-        scheduler.step(test_accuracy)
-
+        if scheduler is not None:
+            scheduler.step(test_accuracy)
+        # Early stopping
+        if use_early_stopping:
+            early_stopping(test_accuracy, model)
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+        
+        #  Best Model saving
+        model_saver(test_accuracy,model)
 
         
 
@@ -167,6 +232,8 @@ def train_model(model, train_loader:DataLoader,test_loader:DataLoader, criterion
             train_losses.append(total_loss/len(train_loader.dataset))
             train_accuracies.append(correct/total)
             test_accuracies.append(test_accuracy)
+        if epoch+1 == num_epochs:
+            print(f"Best_model Acc:{model_saver.best_acc}")
 
     return train_losses, test_losses, train_accuracies, test_accuracies 
 
@@ -254,24 +321,16 @@ def get_all_metrics(model, test_loader, device):
     # Convert to NumPy arrays
     all_y_true = np.array(all_y_true)
     all_y_pred = np.array(all_y_pred)
-    # print(np.array(np.unique(all_y_true, return_counts=True)).T)
-    # print(np.array(np.unique(all_y_pred, return_counts=True)).T)
 
-    # Compute metrics
-    precision = precision_score(all_y_true, all_y_pred, average='macro',zero_division=1) #Unweighted Average Precision
-    recall = recall_score(all_y_true, all_y_true, average='macro',zero_division=1) # UAR 
-    f1 = f1_score(all_y_true, all_y_pred, average="macro", zero_division=1)
+    label_names = [_label_to_emotion_for_metrics(i) for i in range(8)]
 
     conf_matrix = confusion_matrix(all_y_true, all_y_pred)
 
-    # Print results
-    print(f"Macro Precision: {precision:.4f}")
-    print(f"UAR (Macro Recall): {recall:.4f}")
-    print(f"Macro F1-score: {f1:.4f}")
+    # Print classification report
+    print("Classification Report:")
+    print(classification_report(all_y_true, all_y_pred, target_names=label_names))
 
     # Display Confusion Matrix
-
-    label_names = [_label_to_emotion_for_metrics(i) for i in range(8)]
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", xticklabels=label_names, yticklabels=label_names)
@@ -280,6 +339,4 @@ def get_all_metrics(model, test_loader, device):
     plt.title("Confusion Matrix")
     plt.show()
 
-    # Print classification report
-    print("Classification Report:")
-    print(classification_report(all_y_true, all_y_pred, target_names=label_names))
+
