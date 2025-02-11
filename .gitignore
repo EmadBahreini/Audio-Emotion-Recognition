@@ -3,5 +3,6 @@ __pycache__/
 
 
 # Data folder
-data/RAVDESS/
-!data/RAVDESS/README.md
+data/RAVDESS/Singing
+data/RAVDESS/Speech
+
