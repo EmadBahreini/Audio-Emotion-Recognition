@@ -336,9 +336,7 @@ def get_all_metrics(model, test_loader, device):
     fig ,ax= plt.subplots(figsize=(8, 6))
 
     cm_display = ConfusionMatrixDisplay(conf_matrix,display_labels=label_names)
-    cm_display.plot(cmap='Blues',xticks_rotation = 45,colorbar=False,ax=ax)
-
-    ax.set_title("Confusion Matrix for CNN Model")
+    cm_display.plot(cmap='magma',xticks_rotation = 45,ax=ax,values_format='.1f')
 
     plt.show()
 
