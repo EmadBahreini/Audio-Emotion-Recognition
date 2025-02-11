@@ -4,4 +4,4 @@ __pycache__/
 
 # Data folder
 data/RAVDESS/
-!data/.gitignore
+!data/RAVDESS/README.md
