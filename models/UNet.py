@@ -26,9 +26,9 @@ class UNet(nn.Module):
         self.out = nn.Conv1d(16, num_classes, kernel_size=1)  # Output for 8 classes
         self.threshold_value = threshold_value
 
-    def forward(self, image):
+    def forward(self, audio):
         # Encoder
-        x1 = self.down_conv_1(image)
+        x1 = self.down_conv_1(audio)
         x2 = self.max_pool_2x2(x1)
         x3 = self.down_conv_2(x2)
         x4 = self.max_pool_2x2(x3)
